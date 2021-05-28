@@ -1,92 +1,99 @@
+from Mixer import Mixer
+from lib import Button, Table
+from File_Explorer import File_Explorer
+from core import MP3, Hash, Comparator
 import tkinter as tk
-from tkinter import ttk
 
 class Application(tk.Frame):
-    def __init__(self, master=None):
+    def __init__(self, master):
         super().__init__(master)
         self.master = master
-        self.create_widgets()
-
-    def create_widgets(self):
-        self.master.grid_columnconfigure(0, weight=1)
-        self.master.grid_columnconfigure(1, weight=2)
         self.master.grid_rowconfigure(0, weight=1)
-        self.master.grid_rowconfigure(1, weight=1)
+        self.master.grid_columnconfigure(0, weight=1)
+        self.create_widgets()
+        self.bind("<<Detection>>",lambda e:self.detect_song())
+    
+    def create_widgets(self):
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=2)
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
 
         self.grid(sticky="nswe")
-        self.mixPanel()
-        self.openSong()
-        self.indexTable()
+        self.create_mixer_panel()
+        self.create_detection_panel()
+        self.create_songs_table()
    
-    def mixPanel(self):
-        self.mixFrame = tk.LabelFrame(self.master,relief="groove",text="Mixing panel")
-        self.mixFrame.grid_columnconfigure(0, weight=1)
-        self.mixFrame.grid_rowconfigure(0, weight=1)
-        self.mixFrame.grid_rowconfigure(1, weight=1)
-        self.mix = HoverButton(self.mixFrame,activebackground="sky blue",relief="groove",text="Mix")
-        self.mix.grid(row=0,column=0,padx=20,ipadx=40,pady=5)
-        self.mixSlider = tk.Scale(self.mixFrame, from_=0,orient="horizontal", resolution=1, to=100)
-        self.mixSlider.grid(row=1,column=0,padx=20,ipadx=40,pady=5)
-        self.mixFrame.grid(row=0,column=1,sticky="nswe",padx=10,pady=20)
+    def create_mixer_panel(self):
+        container = tk.LabelFrame(self,relief="groove",text="Mixer")
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(0, weight=1)
         
+        mixer = Mixer(container)
+        container.grid(row=0,column=1,sticky="nswe",padx=10,pady=20)
+        mixer.grid(row=0,column=0,sticky="nswe",padx=10,pady=20)
 
- 
-    def openSong(self):
-        self.exploreFrame = tk.LabelFrame(self.master,relief="groove",text="open song")
-        self.exploreFrame.grid_columnconfigure(0, weight=1)
-        self.exploreFrame.grid_rowconfigure(0, weight=1)
+    def create_detection_panel(self):
+        container = tk.LabelFrame(self,relief="groove",text="Detect Song")
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(0, weight=1)
 
-        self.explore = HoverButton(self.exploreFrame,activebackground="sky blue",relief="groove",text="open song")
-        self.explore.grid(row=0,column=0,padx=20,ipadx=40,pady=20)
-        self.exploreFrame.grid(row=0,column=0,sticky="nswe",padx=10,pady=20)
+        detect_btn = Button(container,activebackground="sky blue",relief="groove",text="Detect Song")
+        detect_btn.on_click(self.upload_song)
+        detect_btn.grid(row=0,column=0,padx=20,ipadx=40,pady=20)
+        container.grid(row=0,column=0,sticky="nswe",padx=10,pady=20)
 
-    def indexTable(self):
-        self.test={
-            "hala":"40%",
-            "ddd":"420%",
-            "fawf":"440%",
-            "ffq":"42%",
-            "halwwawa":"45%",
+    def upload_song(self):
+        filename = File_Explorer.open()
+        if filename is None:
+            return
+
+        self.song, self.Fs = MP3.read(filename,60) # read only 60 seconds
+        self.mixed_song = self.song
+        self.event_generate("<<Detection>>")
+    
+    def detect_song(self):
+        print("Generating features...")
+        # spectrogram
+        spectrum = MP3.get_spectrogram(self.mixed_song)
+        features = MP3.get_features(self.mixed_song,spectrum,self.Fs)
+        
+        print("Generating Hashes...")
+        # hashes
+        hashes = {
+            "spectrogram_hash": Hash.generate_hash_code(spectrum),
+            "feature_1": Hash.generate_hash_code(features[0]),
+            "feature_2": Hash.generate_hash_code(features[1])
         }
-
-        self.tableFrame = tk.LabelFrame(self.master,relief="groove",text="Index Table")
-        self.tableFrame.grid_columnconfigure(0, weight=1)
-        self.tableFrame.grid_rowconfigure(0, weight=1)
-        self.indexTree = ttk.Treeview(self.tableFrame)
-        self.indexTree["columns"] = ("Song Name" ,"Similarity Index")
-        self.indexTree.column("#0",width=20,anchor="center")
-        self.indexTree.column("Song Name",width=200,anchor="center")
-        self.indexTree.column("Similarity Index",width=200,anchor="center")
         
-        self.indexTree.heading("#0", text="")
-        self.indexTree.heading("Song Name", text="Song Name")
-        self.indexTree.heading("Similarity Index", text="Similarity Index")
-        self.treeInsert(self.test)
-        self.indexTree.grid(row=0,column=0,padx=20,ipadx=40,pady=20)
-        self.tableFrame.grid(row=1,column=0,columnspan=2,sticky="nswe",padx=10,pady=20)
+        print("Comparing Hashes...")
+        # Compare hashes
+        songs = Comparator.get_similar_songs(hashes)        
+        # update songs table
+        print("Finished.")
+        self.update_songs_table(songs)
 
-    def treeInsert(self,result):
-        for index,song in enumerate(result):
-            self.indexTree.insert(parent="",index=index+1,text=f"{index+1}st",values=(song,result[song]))
+    def create_songs_table(self):
+        
+        container = tk.LabelFrame(self,relief="groove",text="Index Table")
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(0, weight=1)
 
-    def edit(self,result):
-        x = self.indexTree.get_children()
-        for item in x: 
-            self.indexTree.delete(item)
-        self.treeInsert(result)
+        columns = ("Song Name" ,"Similarity Index")
+        self.table = Table(container,columns=columns)
+        
+        container.grid(row=1,column=0,columnspan=2,sticky="nswe",padx=10,pady=20)
+        self.table.grid(row=0,column=0,columnspan=2,sticky="nswe",padx=10,pady=20)
 
-class HoverButton(tk.Button):
-    def __init__(self, master, **kw):
-        tk.Button.__init__(self,master=master,**kw)
-        self.defaultBackground = self["background"]
-        self.bind("<Enter>", self.on_enter)
-        self.bind("<Leave>", self.on_leave)
+    def update_songs_table(self,songs=[()]):
+        """Update table with new songs their similarity index.
 
-    def on_enter(self, e):
-        self['background'] = self['activebackground']
-
-    def on_leave(self, e):
-        self['background'] = self.defaultBackground
+        Args:
+            songs (list, optional): List of tuples of songs. 
+            Each tuple contains the song name and similarity index . Defaults to [()].
+        """                
+        self.table.clear()
+        self.table.bulk_insert(songs)
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -31,18 +31,3 @@ class Json():
         with open(filename,"r") as file:
             data = json.loads(file.read())
         return data
-
-if __name__ == "__main__":
-    demo_data = [
-        {
-            "one":1,
-            "two":2
-        },
-        {
-            "three":3,
-            "four":4
-        }
-    ]
-    Json.writer(demo_data,"demo.json")
-    data = Json.reader("demo.json")
-    print(data)

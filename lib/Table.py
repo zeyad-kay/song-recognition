@@ -1,5 +1,4 @@
 from tkinter import ttk
-from tkinter.constants import NO
 
 class Table(ttk.Treeview):
     def __init__(self,master,**kwargs):
